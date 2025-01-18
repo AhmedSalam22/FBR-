@@ -17,11 +17,7 @@ def push_date(values=None, Thread=True):
     if values == None:
         values = sg.user_settings_load()
 
-    if sg.user_settings_get_entry('-Folder-') != '':
-        log = sg.user_settings_get_entry('-Folder-')
-    else:
-        log = os.path.join(os.path.join(os.environ['USERPROFILE']), 'Desktop') 
-    log = log + '\log.txt'
+    log = os.path.join(os.environ['USERPROFILE'])  + '\log.txt'
     conn = None
     # create ZK instance
     zk = ZK(values['-IP-'], port=int(values['-Port-']), timeout=5, password=values['-Password-'], force_udp=False, ommit_ping=False)
@@ -37,6 +33,7 @@ def push_date(values=None, Thread=True):
         cursor = cnxn.cursor()
 
 
+        count = 0
         for attendance in attendances:
             cursor.execute(
                 "select * from attendance Where employeeid=? and eventtime=?",
@@ -45,7 +42,7 @@ def push_date(values=None, Thread=True):
             )
 
             rows = cursor.fetchall()
-            if len(rows) == 0 and attendance.user_id != 1:
+            if len(rows) == 0:
                 cursor.execute(
                     "Insert Into attendance(employeeid, eventtime, isCheckIn, donwloaddate) Values(?, ?, ?, ?)",
                     attendance.user_id,
@@ -53,6 +50,8 @@ def push_date(values=None, Thread=True):
                     attendance.punch,
                     datetime.now()
                 )
+            if count % 100 == 0:
+                cnxn.commit()
             print(f'{attendance.user_id},{attendance.punch},{attendance.status}, {attendance.timestamp}, {attendance.uid}')
             
         cnxn.commit()
@@ -82,28 +81,37 @@ def new_thread():
     print("new Thread")
     global running
     global first_time
-    if first_time:
-        print("first time")
-        schedule.every(1).hour.do(push_date)
+    times = sg.user_settings_get_entry('-Time-', '')
+    if first_time and times != '':
+        for run_time in times.split(","):
+            print(run_time)
+            schedule.every().day.at(run_time).do(push_date)
         first_time = False
+    elif times != '':
+        for run_time in times.split(","):
+            schedule.every().day.at(run_time).do(push_date)
+    else:
+        schedule.every(3).hour.do(push_date)
+
     running = True
     while running:
-        print("running", datetime.now())
+        # print("running", datetime.now())
         schedule.run_pending()
         time.sleep(0.1)
 
+sg.theme('SandyBeach')      
 
 # All the stuff inside your window.
 layout = [  [sg.Text('Push Attendance Details')],
-            [sg.Text('Folder'), sg.In(sg.user_settings_get_entry('-Folder-', ''), size=(25,1), enable_events=True ,key='-FOLDER-'), sg.FolderBrowse()],
-            [sg.Text('IP'), sg.InputText(sg.user_settings_get_entry('-IP-', ''), key='-IP-')],
-            [sg.Text('Port'), sg.InputText(sg.user_settings_get_entry('-Port-', ''), key='-Port-')],
-            [sg.Text('Password'), sg.InputText(sg.user_settings_get_entry('-Password-', ''), key='-Password-')],
-            [sg.Button('Save'), sg.Button('Cancel')] ]
+            [sg.Text('IP', size=(15,1)), sg.InputText(sg.user_settings_get_entry('-IP-', '') , disabled=True, key='-IP-')],
+            [sg.Text('Port', size=(15,1)), sg.InputText(sg.user_settings_get_entry('-Port-', ''),disabled=True,   key='-Port-')],
+            [sg.Text('Password', size=(15,1)), sg.InputText(sg.user_settings_get_entry('-Password-', ''),disabled=True,   key='-Password-')],
+            [sg.Text('Run Time', size=(15,1)), sg.InputText(sg.user_settings_get_entry('-Time-', ''),disabled=True,   key='-Time-')],
+            [sg.Button('Save'), sg.Button('Run'), sg.Button('Cancel')] ]
 
 # Create the Window
 window = sg.Window('Upload FBR to Server', layout, finalize=True)
-window.bind("<Control-KeyPress-t>", "CTRL-T")
+window.bind("<Control-Alt-KeyPress-z>", "CTRL-Z")
 
 # Event Loop to process "events" and get the "values" of the inputs
 first_time = True
@@ -113,17 +121,19 @@ while True:
     if event == sg.WIN_CLOSED or event == 'Cancel':	# if user closes window or clicks cancel
       break
     elif event == 'Save':
-        sg.user_settings_set_entry('-Folder-', values['-FOLDER-'])
         sg.user_settings_set_entry('-IP-', values['-IP-'])
         sg.user_settings_set_entry('-Port-', values['-Port-'])
         sg.user_settings_set_entry('-Password-', values['-Password-'])
+        sg.user_settings_set_entry('-Time-', values['-Time-'])
         sg.popup("You Settings Has been Saved")
+    elif event == 'CTRL-Z':
+        window['-IP-'].update(disabled=False)
+        window['-Port-'].update(disabled=False)
+        window['-Password-'].update(disabled=False)
+        window['-Time-'].update(disabled=False)
+    elif event == 'Run':
         push_date(values, Thread=False)
 
-    elif event == "CTRL-T":
-        pass
-        # window.UnHide()
-        # window.maximize()
-       
+
 
 window.close()

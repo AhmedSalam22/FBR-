@@ -1,0 +1,40 @@
+-- Step 1: Create a Temporary Table to Store the OUTPUT Results
+CREATE TABLE #TempOutput (
+    employeeId INT,
+    eventTime DATETIME,
+    isCheckin BIT,
+    downloaddate DATETIME
+);
+
+-- Step 2: Perform the Update and Capture the OUTPUT in the Temporary Table
+WITH CTE AS (
+    SELECT TOP 3 
+        [employeeid] AS employeeId,
+        [eventtime] AS eventTime,
+        [isCheckIn] AS isCheckin,
+        [donwloaddate] AS downloaddate
+    FROM [attendance]
+    WHERE [zohopeople] IS NULL
+)
+UPDATE [attendance]
+SET [zohopeople] = 1
+OUTPUT 
+    INSERTED.[employeeid],
+    INSERTED.[eventtime],
+    INSERTED.[isCheckIn],
+    INSERTED.[donwloaddate]
+INTO #TempOutput
+FROM CTE
+WHERE 
+    [attendance].[employeeid] = CTE.[employeeId]
+    AND [attendance].[eventtime] = CTE.[eventTime]
+    AND [attendance].[isCheckIn] = CTE.[isCheckin]
+    AND [attendance].[donwloaddate] = CTE.[downloaddate];
+
+-- Step 3: Query the Temporary Table Twice to Duplicate the Result
+SELECT [employeeid],[eventTime], 0 as isCheckin, [downloaddate] FROM #TempOutput
+UNION ALL
+SELECT [employeeid],[eventTime], 1 as isCheckin, [downloaddate] FROM #TempOutput
+
+-- Step 4: Clean Up the Temporary Table
+DROP TABLE #TempOutput;
