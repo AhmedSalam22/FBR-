@@ -1,0 +1,1 @@
+jdbc:jtds:sqlserver://localhost;databaseName=Attendance;integratedSecurity=true
